@@ -90,6 +90,22 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - Airflow logs are written to `./logs/` (gitignored).
 - Default admin login: `airflow` / `airflow` (local dev only).
 
+## Lessons Learned
+
+### Task 1 — Docker Compose config bugs (3 iterations to fix)
+**Mistakes made:**
+1. **YAML anchor cycle** — merged `*airflow-common` (a service-level anchor) into an `environment` mapping. A service block can't be merged into a field-level mapping. YAML detected the self-reference and refused to parse.
+2. **Mixed Airflow init patterns** — set `_AIRFLOW_WWW_USER_CREATE=true` (entrypoint-driven init, needs `_AIRFLOW_WWW_USER_PASSWORD`) while also providing a custom `command` that ran `airflow users create`. Two mechanisms fighting over the same job.
+3. **YAML `>` block scalar** — wrote a multi-line `airflow users create` command under `>`. YAML `>` folds newlines into spaces, turning each flag line into a separate shell command.
+
+**Root cause:** Pattern-matched against recalled examples without simulating what the parser and runtime would actually do. Plausible-looking config ≠ correct config.
+
+**Going forward:**
+- When writing YAML anchors, verify the anchor scope matches the merge target (service block → service block, env map → env map).
+- Never mix two init mechanisms for the same resource. Pick one and use it exclusively.
+- Use `|` for multiline shell scripts in YAML (preserves newlines). Use `>` only for folded prose. When in doubt, use a single-line `bash -c "..."`.
+- Reason through config files line by line before writing — don't assemble from recalled patterns.
+
 ## Stretch Goals — Phase 2/3 (Only after Phase 1 is polished)
 - [ ] Quality Inspector (rule-based only, no LLM)
 - [ ] Pipeline Doctor (LangGraph)
