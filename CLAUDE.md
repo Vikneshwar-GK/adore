@@ -14,6 +14,16 @@ After completing each task:
 4. If any Critical Rule was added or modified, update the `## Critical Rules` section.
 5. Commit the updated `CLAUDE.md` as part of the task's final commit.
 
+**Post-task review process:**
+After completing each task, list the key files created or modified (not every file — just the architecturally significant ones). Format this as:
+```
+FILES FOR REVIEW:
+- path/to/file1 — brief reason
+- path/to/file2 — brief reason
+```
+
+The user will share these with the Tech Lead for architectural review before moving to the next task. Do not proceed to the next task — wait for the user.
+
 **Do not remove or rewrite existing content unless it is factually wrong.** Only append or update.
 
 
@@ -89,6 +99,15 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - GCP credentials file is gitignored. Mount it by setting `GCP_CREDENTIALS_PATH` in `.env` and adding a volume entry if needed per-task.
 - Airflow logs are written to `./logs/` (gitignored).
 - Default admin login: `airflow` / `airflow` (local dev only).
+
+## Environment Assumptions — Never Do This
+**Never assume the user has any CLI tool, runtime, or package installed.** Before giving a command that requires a tool, verify it is installed first or explicitly guide installation. This applies to: `gcloud`, `docker`, `python`, `dbt`, `node`, or anything else.
+
+When guiding setup steps:
+1. Check if the tool exists (`tool --version`) before using it
+2. If not found, provide install instructions first
+3. Account for OS/architecture differences (e.g. Apple Silicon vs Intel on macOS)
+4. Only proceed to the next step after the user confirms the current one works
 
 ## Lessons Learned
 
