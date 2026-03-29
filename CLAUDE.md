@@ -1,5 +1,22 @@
 # ADORE — Autonomous Data Operations and Recovery Engine
 
+
+## Instructions for Claude Code
+**Read this file at the start of every session.**
+
+Before each task:
+Analyse the instruction first and tell me if you have any questions. Wait for my confirmation before proceeding with the task.
+
+After completing each task:
+1. Update `Current Progress — Phase 1` by checking off the completed task.
+2. Add any new decisions, patterns, gotchas, or conventions that emerged during implementation to the relevant section of this file (or create a new section if needed).
+3. If a new reusable module/utility was created, document it under a `## Key Modules` section so future tasks know it exists and how to use it.
+4. If any Critical Rule was added or modified, update the `## Critical Rules` section.
+5. Commit the updated `CLAUDE.md` as part of the task's final commit.
+
+**Do not remove or rewrite existing content unless it is factually wrong.** Only append or update.
+
+
 ## What This Project Is
 A data pipeline that ingests live San Francisco city data (weather, transit, incidents), transforms it through dbt medallion architecture (raw → staging → warehouse) in BigQuery, and uses an AI agent (Schema Guardian) to autonomously detect schema drift, diagnose impact, generate dbt model fixes, and present repair packages for human approval via a Streamlit dashboard.
 
@@ -47,9 +64,9 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - Dashboard apps: `dashboards/{dashboard_name}.py`
 - Utility modules: `dags/utils/`
 
-## Current Progress
+## Current Progress — Phase 1 (Active)
 - [x] Task 0 — Repository setup and scaffolding
-- [ ] Task 1 — Local environment setup (Docker, Airflow)
+- [x] Task 1 — Local environment setup (Docker, Airflow)
 - [ ] Task 2 — GCP project setup
 - [ ] Task 3 — BigQuery datasets
 - [ ] Task 4 — API credential testing
@@ -64,8 +81,18 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - [ ] Task 13 — Schema Guardian agent
 - [ ] Task 14 — Chaos Engine (schema drift only)
 - [ ] Task 15 — Agent Monitor dashboard
-- [ ] Task 16 — Quality Inspector (rule-based only, stretch)
-- [ ] Task 17 — Pipeline Doctor (stretch)
-- [ ] Task 18 — Documentation Agent (stretch)
-- [ ] Task 19 — City Intelligence dashboard (stretch)
-- [ ] Task 20 — README + architecture diagram + demo polish
+- [ ] Task 16 — README + architecture diagram + demo polish
+
+## Docker / Airflow Setup Notes
+- SQLite does not support LocalExecutor — Postgres is required as the Airflow metadata DB. A `postgres:15` service is included in `docker-compose.yml` for this purpose only (not a data warehouse).
+- `airflow-init` service runs `db migrate` + `users create` once, then exits (`restart: "no"`). Webserver and scheduler depend on it completing successfully.
+- GCP credentials file is gitignored. Mount it by setting `GCP_CREDENTIALS_PATH` in `.env` and adding a volume entry if needed per-task.
+- Airflow logs are written to `./logs/` (gitignored).
+- Default admin login: `airflow` / `airflow` (local dev only).
+
+## Stretch Goals — Phase 2/3 (Only after Phase 1 is polished)
+- [ ] Quality Inspector (rule-based only, no LLM)
+- [ ] Pipeline Doctor (LangGraph)
+- [ ] Documentation Agent
+- [ ] City Intelligence dashboard
+- [ ] Pipeline Health dashboard
