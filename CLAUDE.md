@@ -80,8 +80,8 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - [x] Task 2 — GCP project setup
 - [x] Task 3 — BigQuery datasets
 - [x] Task 4 — API credential testing
-- [ ] Task 5 — Airflow running locally
-- [ ] Task 6 — GCP cost protection
+- [x] Task 5 — Airflow running locally
+- [x] Task 6 — GCP cost protection
 - [ ] Task 7 — First ingestion DAG (Open-Meteo)
 - [ ] Task 8 — Remaining ingestion DAGs
 - [ ] Task 9 — Deploy Airflow to GCE VM
@@ -146,6 +146,10 @@ Tests 511.org GTFS-RT TripUpdates feed. Decodes with `utf-8-sig` (BOM handling).
 
 ### `infra/api_tests/test_sf311.py`
 Tests SF 311 Socrata API. Sends `X-App-Token` header. Filters last 24h with `$where` clause using `%Y-%m-%dT%H:%M:%S` format (no `.000Z` suffix).
+
+## GCP Cost Controls
+- **Budget alert:** $50 cap on `adore-pipeline-v2` with email alerts at 50% ($25), 80% ($40), and 100% ($50). Configured in GCP Console → Billing → Budgets & alerts.
+- **BigQuery max bytes billed:** No persistent project-level default exists in the BigQuery API. The 1GB cap (`maximum_bytes_billed=1_073_741_824`) must be set per query via `QueryJobConfig`. This will be enforced in `dags/utils/bigquery_client.py` so every query in the project has the cap automatically.
 
 ## GCP Setup Notes
 - GCP project ID: `adore-pipeline-v2` (original `adore-pipeline` was deleted)
