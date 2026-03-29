@@ -79,7 +79,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - [x] Task 1 — Local environment setup (Docker, Airflow)
 - [x] Task 2 — GCP project setup
 - [x] Task 3 — BigQuery datasets
-- [ ] Task 4 — API credential testing
+- [x] Task 4 — API credential testing
 - [ ] Task 5 — Airflow running locally
 - [ ] Task 6 — GCP cost protection
 - [ ] Task 7 — First ingestion DAG (Open-Meteo)
@@ -137,6 +137,15 @@ Creates all 4 datasets (`raw`, `staging`, `warehouse`, `agents`) and 3 raw table
 
 ### `infra/verify_gcp.py`
 Confirms BigQuery connectivity. Run after any credential or project changes.
+
+### `infra/api_tests/test_open_meteo.py`
+Tests Open-Meteo weather API. No auth. Verifies current_weather and hourly fields are present.
+
+### `infra/api_tests/test_511.py`
+Tests 511.org GTFS-RT TripUpdates feed. Decodes with `utf-8-sig` (BOM handling). 0 entities is valid outside peak hours — confirms connectivity and parse, not volume.
+
+### `infra/api_tests/test_sf311.py`
+Tests SF 311 Socrata API. Sends `X-App-Token` header. Filters last 24h with `$where` clause using `%Y-%m-%dT%H:%M:%S` format (no `.000Z` suffix).
 
 ## GCP Setup Notes
 - GCP project ID: `adore-pipeline-v2` (original `adore-pipeline` was deleted)
