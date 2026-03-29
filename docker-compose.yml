@@ -7,6 +7,7 @@ x-airflow-env: &airflow-env
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
   AIRFLOW__CORE__FERNET_KEY: ""
   AIRFLOW__WEBSERVER__SECRET_KEY: "local-dev-secret"
+  GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-credentials.json
 
 x-airflow-common: &airflow-common
   build: .
@@ -18,6 +19,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./dbt:/opt/airflow/dbt
     - ./logs:/opt/airflow/logs
+    - ${GCP_CREDENTIALS_PATH}:/opt/airflow/gcp-credentials.json:ro
   depends_on:
     postgres:
       condition: service_healthy
