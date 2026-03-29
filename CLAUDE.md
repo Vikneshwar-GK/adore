@@ -78,7 +78,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - [x] Task 0 — Repository setup and scaffolding
 - [x] Task 1 — Local environment setup (Docker, Airflow)
 - [x] Task 2 — GCP project setup
-- [ ] Task 3 — BigQuery datasets
+- [x] Task 3 — BigQuery datasets
 - [ ] Task 4 — API credential testing
 - [ ] Task 5 — Airflow running locally
 - [ ] Task 6 — GCP cost protection
@@ -124,6 +124,19 @@ When guiding setup steps:
 - Never mix two init mechanisms for the same resource. Pick one and use it exclusively.
 - Use `|` for multiline shell scripts in YAML (preserves newlines). Use `>` only for folded prose. When in doubt, use a single-line `bash -c "..."`.
 - Reason through config files line by line before writing — don't assemble from recalled patterns.
+
+## Key Modules
+
+### `dags/utils/schemas.py`
+Single source of truth for all BigQuery table schemas. Import from here — never define schemas inline in DAGs or setup scripts.
+- `RAW_TABLE_SCHEMA` — shared schema for all raw ingestion tables (`ingested_at TIMESTAMP`, `source STRING`, `raw_data STRING`)
+- Staging, warehouse, and agent schemas will be added here in Tasks 11–13.
+
+### `infra/setup_bigquery.py`
+Creates all 4 datasets (`raw`, `staging`, `warehouse`, `agents`) and 3 raw tables (`weather_sf`, `transit_sf`, `incidents_sf`). Idempotent — safe to re-run. Imports schemas from `dags/utils/schemas.py`.
+
+### `infra/verify_gcp.py`
+Confirms BigQuery connectivity. Run after any credential or project changes.
 
 ## GCP Setup Notes
 - GCP project ID: `adore-pipeline-v2` (original `adore-pipeline` was deleted)
