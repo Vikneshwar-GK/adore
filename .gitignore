@@ -1,0 +1,12 @@
+.env
+gcp-credentials.json
+logs/
+plugins/
+config/
+__pycache__/
+*.pyc
+.DS_Store
+chaos/chaos_log.json
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
