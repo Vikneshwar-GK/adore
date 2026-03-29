@@ -32,7 +32,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 
 ## Tech Stack
 - **Orchestration:** Apache Airflow 2.8.1 (self-hosted, Docker Compose, LocalExecutor)
-- **Data Warehouse:** Google BigQuery (project: adore-pipeline, region: us-central1)
+- **Data Warehouse:** Google BigQuery (project: adore-pipeline-v2, region: us-central1)
 - **Transformation:** dbt (medallion: raw → staging → warehouse)
 - **Agent Framework:** Anthropic Python SDK (native tool-use API, no LangChain)
 - **Dashboard:** Streamlit
@@ -77,7 +77,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 ## Current Progress — Phase 1 (Active)
 - [x] Task 0 — Repository setup and scaffolding
 - [x] Task 1 — Local environment setup (Docker, Airflow)
-- [ ] Task 2 — GCP project setup
+- [x] Task 2 — GCP project setup
 - [ ] Task 3 — BigQuery datasets
 - [ ] Task 4 — API credential testing
 - [ ] Task 5 — Airflow running locally
@@ -124,6 +124,14 @@ When guiding setup steps:
 - Never mix two init mechanisms for the same resource. Pick one and use it exclusively.
 - Use `|` for multiline shell scripts in YAML (preserves newlines). Use `>` only for folded prose. When in doubt, use a single-line `bash -c "..."`.
 - Reason through config files line by line before writing — don't assemble from recalled patterns.
+
+## GCP Setup Notes
+- GCP project ID: `adore-pipeline-v2` (original `adore-pipeline` was deleted)
+- Service account: `adore-sa@adore-pipeline-v2.iam.gserviceaccount.com` with roles `BigQuery Admin` and `Storage Admin`
+- Credentials key stored at project root as `gcp-credentials.json` (gitignored)
+- `GOOGLE_APPLICATION_CREDENTIALS` is set in `x-airflow-env` in `docker-compose.yml` pointing to `/opt/airflow/gcp-credentials.json` (mounted read-only from `GCP_CREDENTIALS_PATH`)
+- `infra/verify_gcp.py` confirms BigQuery connectivity — run it after any credential or project changes
+- `python-dotenv` added to `requirements.txt` for loading `.env` outside of Docker contexts
 
 ## Stretch Goals — Phase 2/3 (Only after Phase 1 is polished)
 - [ ] Quality Inspector (rule-based only, no LLM)
