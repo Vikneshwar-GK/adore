@@ -82,7 +82,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - [x] Task 4 — API credential testing
 - [x] Task 5 — Airflow running locally
 - [x] Task 6 — GCP cost protection
-- [ ] Task 7 — First ingestion DAG (Open-Meteo)
+- [x] Task 7 — First ingestion DAG (Open-Meteo)
 - [ ] Task 8 — Remaining ingestion DAGs
 - [ ] Task 9 — Deploy Airflow to GCE VM
 - [ ] Task 10 — dbt setup
@@ -146,6 +146,14 @@ Tests 511.org GTFS-RT TripUpdates feed. Decodes with `utf-8-sig` (BOM handling).
 
 ### `infra/api_tests/test_sf311.py`
 Tests SF 311 Socrata API. Sends `X-App-Token` header. Filters last 24h with `$where` clause using `%Y-%m-%dT%H:%M:%S` format (no `.000Z` suffix).
+
+### `dags/utils/bigquery_client.py`
+The ONLY place in the project that writes to BigQuery. All DAGs must import from here.
+- `write_to_bigquery(dataset_id, table_id, rows)` — streaming insert, raises on error
+- `query_bigquery(sql)` — runs query with 1GB `maximum_bytes_billed` cap enforced
+
+### `dags/ingestion/dag_weather_sf.py`
+Ingestion DAG for Open-Meteo weather. Runs every 15 min. Fetches full API response, writes one row to `raw.weather_sf`. Establishes the pattern for all ingestion DAGs.
 
 ## GCP Cost Controls
 - **Budget alert:** $50 cap on `adore-pipeline-v2` with email alerts at 50% ($25), 80% ($40), and 100% ($50). Configured in GCP Console → Billing → Budgets & alerts.
