@@ -15,14 +15,18 @@ After completing each task:
 5. Commit the updated `CLAUDE.md` as part of the task's final commit.
 
 **Post-task review process:**
-After completing each task, list the key files created or modified (not every file — just the architecturally significant ones). Format this as:
+After completing each task, produce two things:
+
+1. **Manager review** (under 200 words): What was built, key architectural decisions made, verification results, and anything important for the next decision. This goes to the user's manager.
+
+2. **Files for review** (for Tech Lead): Key files created or modified — not every file, just architecturally significant ones. Format:
 ```
 FILES FOR REVIEW:
 - path/to/file1 — brief reason
 - path/to/file2 — brief reason
 ```
 
-The user will share these with the Tech Lead for architectural review before moving to the next task. Do not proceed to the next task — wait for the user.
+Do not proceed to the next task — wait for the user.
 
 **Do not remove or rewrite existing content unless it is factually wrong.** Only append or update.
 
@@ -47,12 +51,43 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 5. **LLM is never called on every poll cycle.** Rule-based detection first, LLM only when anomaly detected.
 6. **All agent actions go through approval_queue.** Human approves, rejects, or modifies before deployment.
 7. **Environment variables via `.env` file.** Never hardcode credentials or project IDs.
+8. **Intermediate dbt models** go in `dbt/models/intermediate/`. Materialized as views in the `warehouse` schema.
 
 ## BigQuery Datasets
 - `raw` — Bronze. Raw API JSON responses.
 - `staging` — Silver. dbt-parsed and cleaned.
-- `warehouse` — Gold. Star schema facts and dimensions.
+- `warehouse` — Gold. Star schema facts and dimensions. Also contains intermediate cross-source models.
 - `agents` — Agent logs, schema metadata, quality scores, approval queue.
+
+## dbt Layer Architecture
+
+### Layers
+- **Staging (Silver):** One model per source. Parses raw JSON into typed columns. Materialized as views. Schema: `staging`.
+- **Intermediate:** Cross-source analytical models. Joins staging models on shared dimensions (time). Materialized as views. Schema: `warehouse`.
+- **Warehouse (Gold):** Final fact and dimension tables for dashboard consumption. Materialized as tables. Schema: `warehouse`.
+
+### Intermediate Models (cross-source)
+These models exist because the data sources share natural join keys (time). Only joins with genuine analytical value are built — no forced correlations.
+
+- `int_hourly_weather_transit` — Hourly grain. Average transit delay + trip counts joined with hourly weather (precip, temp, wind). Join key: hour. Purpose: "does weather affect transit delays?"
+- `int_daily_weather_incidents` — Daily grain. Incident counts by category joined with daily weather summary. Join key: date. Purpose: "does weather drive 311 complaint volume?"
+
+### Warehouse Fact Tables
+- `fact_weather_transit_hourly` — Built from int_hourly_weather_transit. Adds day_of_week, is_weekend, is_rush_hour. Dashboard-ready for weather impact analysis.
+- `fact_daily_city_summary` — One row per day. Weather summary + total delays + total incidents + top incident categories. The "city pulse" table.
+- `fact_transit_performance` — Single-source. Per-route, per-hour delay stats. Enables route reliability analysis.
+- `fact_incident_trends` — Single-source. Daily/weekly incident counts by type and neighborhood.
+
+### Warehouse Dimension Tables
+- `dim_date` — date_id, date, hour, day_of_week, is_weekend, is_holiday
+- `dim_location` — location_id, latitude, longitude, neighborhood, zip_code
+- `dim_route` — route_id, route_name, transit_type
+- `dim_stop` — stop_id, stop_name, latitude, longitude, route_id
+
+### Design Decisions
+- Weather data is city-level (single point for all SF). Do NOT join weather at neighborhood level — it's the same value for every neighborhood. Weather joins are time-based only.
+- Transit ↔ Incidents has no natural causal link. Do NOT build cross-source models joining these two.
+- Intermediate layer is justified by genuine cross-source analysis, not added for decoration.
 
 ## Data Sources
 | Source | API | Frequency | Auth |
@@ -69,6 +104,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 ## File Conventions
 - Ingestion DAGs: `dags/ingestion/dag_{source}_{city}.py`
 - dbt staging models: `dbt/models/staging/stg_{source}_{city}.sql`
+- dbt intermediate models: `dbt/models/intermediate/int_{description}.sql`
 - dbt warehouse models: `dbt/models/warehouse/fact_{source}_{city}.sql`, `dim_{name}.sql`
 - Agent implementations: `agents/{agent_name}.py`
 - Dashboard apps: `dashboards/{dashboard_name}.py`
@@ -80,18 +116,18 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - [x] Task 2 — GCP project setup
 - [x] Task 3 — BigQuery datasets
 - [x] Task 4 — API credential testing
-- [x] Task 5 — Airflow running locally
-- [x] Task 6 — GCP cost protection
+- [x] Task 5/6 — Airflow verification + GCP cost protection
 - [x] Task 7 — First ingestion DAG (Open-Meteo)
 - [x] Task 8 — Remaining ingestion DAGs
-- [ ] Task 9 — Deploy Airflow to GCE VM
 - [ ] Task 10 — dbt setup
-- [ ] Task 11 — dbt staging models
-- [ ] Task 12 — dbt warehouse models
+- [ ] Task 11 — dbt staging models (Silver)
+- [ ] Task 12 — dbt warehouse models (Gold)
+- [ ] Task 12b — dbt intermediate models (cross-source analytics)
 - [ ] Task 13 — Schema Guardian agent
 - [ ] Task 14 — Chaos Engine (schema drift only)
 - [ ] Task 15 — Agent Monitor dashboard
-- [ ] Task 16 — README + architecture diagram + demo polish
+- [ ] Task 16 — City Intelligence dashboard
+- [ ] Task 17 — README + architecture diagram + demo polish
 
 ## Docker / Airflow Setup Notes
 - SQLite does not support LocalExecutor — Postgres is required as the Airflow metadata DB. A `postgres:15` service is included in `docker-compose.yml` for this purpose only (not a data warehouse).
@@ -174,8 +210,8 @@ Ingestion DAG for SF 311 incidents. Runs daily at 2am UTC. Fetches last 24h of r
 - `python-dotenv` added to `requirements.txt` for loading `.env` outside of Docker contexts
 
 ## Stretch Goals — Phase 2/3 (Only after Phase 1 is polished)
+- [ ] Deploy Airflow to GCE VM (deploy after Phase 1 is complete — no benefit deploying during active development)
 - [ ] Quality Inspector (rule-based only, no LLM)
 - [ ] Pipeline Doctor (LangGraph)
 - [ ] Documentation Agent
-- [ ] City Intelligence dashboard
 - [ ] Pipeline Health dashboard
