@@ -17,6 +17,7 @@ After completing each task:
 **Post-task review process:**
 After completing each task, produce two things:
 
+Give me a proper review of the task that I can take back to my manager. Like what you did. Tell the important things that might be useful for making next decision. Keep under 200 words
 1. **Manager review** (under 200 words): What was built, key architectural decisions made, verification results, and anything important for the next decision. This goes to the user's manager.
 
 2. **Files for review** (for Tech Lead): Key files created or modified — not every file, just architecturally significant ones. Format:
@@ -120,7 +121,7 @@ These models exist because the data sources share natural join keys (time). Only
 - [x] Task 7 — First ingestion DAG (Open-Meteo)
 - [x] Task 8 — Remaining ingestion DAGs
 - [x] Task 10 — dbt setup
-- [ ] Task 11 — dbt staging models (Silver)
+- [x] Task 11 — dbt staging models (Silver)
 - [ ] Task 12 — dbt warehouse models (Gold)
 - [ ] Task 12b — dbt intermediate models (cross-source analytics)
 - [ ] Task 13 — Schema Guardian agent
@@ -128,6 +129,13 @@ These models exist because the data sources share natural join keys (time). Only
 - [ ] Task 15 — Agent Monitor dashboard
 - [ ] Task 16 — City Intelligence dashboard
 - [ ] Task 17 — README + architecture diagram + demo polish
+
+## dbt Staging Notes
+- **Schema naming:** dbt by default creates `{target_dataset}_{custom_schema}`. The `generate_schema_name` macro in `dbt/macros/` overrides this to use the custom schema directly. Without it, staging views land in `staging_staging` instead of `staging`.
+- **Weather UNNEST:** Open-Meteo returns parallel arrays. Use `GENERATE_ARRAY(0, N-1)` + `SAFE_OFFSET(idx)` to zip them — BigQuery has no native parallel array unnest.
+- **Transit JSON keys are PascalCase:** `Entities`, `TripUpdate`, `StopTimeUpdates`, `Arrival.Delay`. Standard GTFS-RT lowercase field names do NOT apply to this 511.org response.
+- **Incidents timestamps:** Format is `%Y-%m-%dT%H:%M:%E3S` (milliseconds suffix `.000`). `closed_datetime` does not exist in the SF 311 API response — omitted.
+- **Incidents lat/long:** Stored as strings in the API response — must `SAFE_CAST` to `FLOAT64`.
 
 ## dbt Setup Notes
 - `profiles.yml` is gitignored — commit `profiles.yml.example` instead. The real file must exist at `dbt/profiles.yml` locally and is mounted into containers via `./dbt:/opt/airflow/dbt`.
@@ -209,6 +217,18 @@ dbt project config. Staging → views in `staging` schema. Intermediate → view
 
 ### `dbt/models/staging/sources.yml`
 Declares the `raw` source with all 3 raw tables. Models reference raw tables via `{{ source('raw', 'table_name') }}`.
+
+### `dbt/macros/generate_schema_name.sql`
+Overrides dbt's default schema naming. Without this, dbt appends the target dataset prefix to custom schemas (e.g. `staging_staging`). This macro uses the custom schema name directly so models land in `staging` and `warehouse` as intended.
+
+### `dbt/models/staging/stg_weather_sf.sql`
+Parses Open-Meteo hourly arrays using index-based UNNEST (`GENERATE_ARRAY` + `SAFE_OFFSET`). Deduplicates on `recorded_at`.
+
+### `dbt/models/staging/stg_transit_sf.sql`
+Double-unnests GTFS-RT: Entities → StopTimeUpdates. Keys are PascalCase (`Entities`, `TripUpdate`, `StopTimeUpdates`). Deduplicates on `(trip_id, stop_id, recorded_at)`.
+
+### `dbt/models/staging/stg_incidents_sf.sql`
+Unnests SF 311 JSON array. Maps `status_description` → `status`, `lat`/`long` (strings) → FLOAT64, `neighborhoods_sffind_boundaries` → `neighborhood`. Deduplicates on `service_request_id`.
 
 ## GCP Cost Controls
 - **Budget alert:** $50 cap on `adore-pipeline-v2` with email alerts at 50% ($25), 80% ($40), and 100% ($50). Configured in GCP Console → Billing → Budgets & alerts.

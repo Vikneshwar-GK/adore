@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: stg_weather_sf
+    description: "Hourly weather data for San Francisco, parsed from Open-Meteo API responses. One row per hour, deduplicated on recorded_at."
+    columns:
+      - name: recorded_at
+        description: "UTC timestamp for the forecast hour"
+        tests:
+          - not_null
+      - name: temperature_c
+        description: "Air temperature in Celsius"
+        tests:
+          - not_null
+
+  - name: stg_transit_sf
+    description: "SF Muni transit stop time updates from 511.org GTFS-RT feed. One row per stop time update, deduplicated on (trip_id, stop_id, recorded_at)."
+    columns:
+      - name: trip_id
+        description: "GTFS trip identifier"
+        tests:
+          - not_null
+      - name: route_id
+        description: "GTFS route identifier"
+        tests:
+          - not_null
+      - name: stop_id
+        description: "GTFS stop identifier"
+        tests:
+          - not_null
+
+  - name: stg_incidents_sf
+    description: "SF 311 city incident reports from Socrata API. One row per incident, deduplicated on service_request_id."
+    columns:
+      - name: service_request_id
+        description: "Unique identifier for the 311 service request"
+        tests:
+          - not_null
+          - unique
+      - name: requested_datetime
+        description: "UTC timestamp when the service request was submitted"
+        tests:
+          - not_null
+      - name: status
+        description: "Current status of the service request (e.g. Open, Closed)"
+        tests:
+          - not_null
