@@ -83,7 +83,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 - [x] Task 5 — Airflow running locally
 - [x] Task 6 — GCP cost protection
 - [x] Task 7 — First ingestion DAG (Open-Meteo)
-- [ ] Task 8 — Remaining ingestion DAGs
+- [x] Task 8 — Remaining ingestion DAGs
 - [ ] Task 9 — Deploy Airflow to GCE VM
 - [ ] Task 10 — dbt setup
 - [ ] Task 11 — dbt staging models
@@ -154,6 +154,12 @@ The ONLY place in the project that writes to BigQuery. All DAGs must import from
 
 ### `dags/ingestion/dag_weather_sf.py`
 Ingestion DAG for Open-Meteo weather. Runs every 15 min. Fetches full API response, writes one row to `raw.weather_sf`. Establishes the pattern for all ingestion DAGs.
+
+### `dags/ingestion/dag_transit_sf.py`
+Ingestion DAG for 511.org GTFS-RT transit. Runs every 15 min. Decodes response with `utf-8-sig` (BOM), validates JSON, writes to `raw.transit_sf`. Never use `response.json()` for this endpoint.
+
+### `dags/ingestion/dag_incidents_sf.py`
+Ingestion DAG for SF 311 incidents. Runs daily at 2am UTC. Fetches last 24h of records ($limit=50000), writes entire array as single row to `raw.incidents_sf`. Logs a warning if response hits the 50k limit (potential truncation).
 
 ## GCP Cost Controls
 - **Budget alert:** $50 cap on `adore-pipeline-v2` with email alerts at 50% ($25), 80% ($40), and 100% ($50). Configured in GCP Console → Billing → Budgets & alerts.
