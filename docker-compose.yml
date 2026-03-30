@@ -8,6 +8,7 @@ x-airflow-env: &airflow-env
   AIRFLOW__CORE__FERNET_KEY: ""
   AIRFLOW__WEBSERVER__SECRET_KEY: "local-dev-secret"
   GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-credentials.json
+  DBT_PROFILES_DIR: /opt/airflow/dbt
 
 x-airflow-common: &airflow-common
   build: .

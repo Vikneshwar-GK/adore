@@ -1,0 +1,11 @@
+adore:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: your-gcp-project-id
+      keyfile: /opt/airflow/gcp-credentials.json
+      dataset: staging
+      location: us-central1
+      threads: 2

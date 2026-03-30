@@ -119,7 +119,7 @@ These models exist because the data sources share natural join keys (time). Only
 - [x] Task 5/6 — Airflow verification + GCP cost protection
 - [x] Task 7 — First ingestion DAG (Open-Meteo)
 - [x] Task 8 — Remaining ingestion DAGs
-- [ ] Task 10 — dbt setup
+- [x] Task 10 — dbt setup
 - [ ] Task 11 — dbt staging models (Silver)
 - [ ] Task 12 — dbt warehouse models (Gold)
 - [ ] Task 12b — dbt intermediate models (cross-source analytics)
@@ -128,6 +128,13 @@ These models exist because the data sources share natural join keys (time). Only
 - [ ] Task 15 — Agent Monitor dashboard
 - [ ] Task 16 — City Intelligence dashboard
 - [ ] Task 17 — README + architecture diagram + demo polish
+
+## dbt Setup Notes
+- `profiles.yml` is gitignored — commit `profiles.yml.example` instead. The real file must exist at `dbt/profiles.yml` locally and is mounted into containers via `./dbt:/opt/airflow/dbt`.
+- `profiles.yml` requires a `dataset` field (dbt-bigquery calls it `dataset`, not `schema`). Missing this field causes `Runtime Error: Must specify schema`.
+- `DBT_PROFILES_DIR=/opt/airflow/dbt` is set in `x-airflow-env` so dbt finds profiles.yml inside the container.
+- `dbt debug` will always show `git ERROR` inside the Airflow container — git is not installed there. This is non-blocking; all dbt checks pass.
+- dbt version in container: `1.9.0-b4`, adapter: `dbt-bigquery 1.8.0`.
 
 ## Docker / Airflow Setup Notes
 - SQLite does not support LocalExecutor — Postgres is required as the Airflow metadata DB. A `postgres:15` service is included in `docker-compose.yml` for this purpose only (not a data warehouse).
@@ -196,6 +203,12 @@ Ingestion DAG for 511.org GTFS-RT transit. Runs every 15 min. Decodes response w
 
 ### `dags/ingestion/dag_incidents_sf.py`
 Ingestion DAG for SF 311 incidents. Runs daily at 2am UTC. Fetches last 24h of records ($limit=50000), writes entire array as single row to `raw.incidents_sf`. Logs a warning if response hits the 50k limit (potential truncation).
+
+### `dbt/dbt_project.yml`
+dbt project config. Staging → views in `staging` schema. Intermediate → views in `warehouse` schema. Warehouse → tables in `warehouse` schema.
+
+### `dbt/models/staging/sources.yml`
+Declares the `raw` source with all 3 raw tables. Models reference raw tables via `{{ source('raw', 'table_name') }}`.
 
 ## GCP Cost Controls
 - **Budget alert:** $50 cap on `adore-pipeline-v2` with email alerts at 50% ($25), 80% ($40), and 100% ($50). Configured in GCP Console → Billing → Budgets & alerts.

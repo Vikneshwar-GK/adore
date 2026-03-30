@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: raw
+    database: adore-pipeline-v2
+    schema: raw
+    tables:
+      - name: weather_sf
+      - name: transit_sf
+      - name: incidents_sf
