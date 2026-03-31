@@ -122,13 +122,20 @@ These models exist because the data sources share natural join keys (time). Only
 - [x] Task 8 — Remaining ingestion DAGs
 - [x] Task 10 — dbt setup
 - [x] Task 11 — dbt staging models (Silver)
-- [ ] Task 12 — dbt warehouse models (Gold)
+- [x] Task 12 — dbt warehouse models (Gold)
 - [ ] Task 12b — dbt intermediate models (cross-source analytics)
 - [ ] Task 13 — Schema Guardian agent
 - [ ] Task 14 — Chaos Engine (schema drift only)
 - [ ] Task 15 — Agent Monitor dashboard
 - [ ] Task 16 — City Intelligence dashboard
 - [ ] Task 17 — README + architecture diagram + demo polish
+
+## dbt Warehouse Notes
+- **`dim_date` grain is hourly** — matches weather and transit data. Join incidents (daily grain) to dim_date using `DATE(date_hour)`.
+- **`avg_resolution_hours` is NULL** — SF 311 API does not return `closed_datetime`. Placeholder field kept for future use.
+- **GTFS-RT has no static data** — `dim_route` and `dim_stop` contain IDs only. Route names, stop names, and stop coordinates require a separate GTFS static feed (not in scope).
+- **dim_stop primary route** — when a stop appears on multiple routes, the most-observed route wins (by COUNT). This is an approximation.
+- **`on_time_pct` definition** — arrival_delay_seconds BETWEEN -60 AND 300 (1 min early to 5 min late). Adjust thresholds in Task 12b/15 if needed.
 
 ## dbt Staging Notes
 - **Schema naming:** dbt by default creates `{target_dataset}_{custom_schema}`. The `generate_schema_name` macro in `dbt/macros/` overrides this to use the custom schema directly. Without it, staging views land in `staging_staging` instead of `staging`.
@@ -229,6 +236,16 @@ Double-unnests GTFS-RT: Entities → StopTimeUpdates. Keys are PascalCase (`Enti
 
 ### `dbt/models/staging/stg_incidents_sf.sql`
 Unnests SF 311 JSON array. Maps `status_description` → `status`, `lat`/`long` (strings) → FLOAT64, `neighborhoods_sffind_boundaries` → `neighborhood`. Deduplicates on `service_request_id`.
+
+### Warehouse Dimensions
+- `dim_date` — generated hourly spine (2024–2026), 26.3k rows. No source dependency.
+- `dim_route` — 59 distinct routes from GTFS-RT. IDs only — no names available from TripUpdates feed.
+- `dim_stop` — 3,037 distinct stops. Primary route assigned by most-frequent observation. IDs only.
+- `dim_neighborhood` — 100 SF neighborhoods from 311 data. Centroid = avg lat/lon of incidents.
+
+### Warehouse Facts
+- `fact_transit_performance` — route × hour grain. `on_time_pct` = % delays between -60s and 300s.
+- `fact_incident_trends` — date × neighborhood × service_name grain. `avg_resolution_hours` is NULL — `closed_datetime` not present in SF 311 API response.
 
 ## GCP Cost Controls
 - **Budget alert:** $50 cap on `adore-pipeline-v2` with email alerts at 50% ($25), 80% ($40), and 100% ($50). Configured in GCP Console → Billing → Budgets & alerts.

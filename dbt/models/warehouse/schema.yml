@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "Generated hourly date spine from 2024-01-01 to 2026-12-31. Not derived from source data."
+    columns:
+      - name: date_hour
+        description: "Timestamp truncated to hour — primary key"
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_route
+    description: "Distinct SF Muni routes observed in GTFS-RT feed. Route names not available — IDs only."
+    columns:
+      - name: route_id
+        description: "GTFS route identifier — primary key"
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_stop
+    description: "Distinct transit stops observed in GTFS-RT feed. Stop names and coordinates not available from TripUpdates feed — IDs only."
+    columns:
+      - name: stop_id
+        description: "GTFS stop identifier — primary key"
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_neighborhood
+    description: "SF neighborhoods derived from 311 incident reports. Centroid coordinates are averages of incident locations."
+    columns:
+      - name: neighborhood
+        description: "Neighborhood name (from neighborhoods_sffind_boundaries field) — primary key"
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_transit_performance
+    description: "Hourly transit performance by route. Grain: one row per route per hour."
+    columns:
+      - name: date_hour
+        description: "Hour of observation — FK to dim_date"
+        tests:
+          - not_null
+      - name: route_id
+        description: "GTFS route identifier — FK to dim_route"
+        tests:
+          - not_null
+
+  - name: fact_incident_trends
+    description: "Daily incident counts by neighborhood and type. Grain: one row per date per neighborhood per service_name."
+    columns:
+      - name: date
+        description: "Date of incident request — FK to dim_date (join on DATE(date_hour))"
+        tests:
+          - not_null
+      - name: neighborhood
+        description: "SF neighborhood — FK to dim_neighborhood"
+        tests:
+          - not_null
+      - name: service_name
+        description: "Incident category (e.g. Street and Sidewalk Cleaning, Encampment)"
+        tests:
+          - not_null
