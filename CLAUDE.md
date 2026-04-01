@@ -124,7 +124,8 @@ These models exist because the data sources share natural join keys (time). Only
 - [x] Task 11 — dbt staging models (Silver)
 - [x] Task 12 — dbt warehouse models (Gold)
 - [x] Task 12b — dbt intermediate models (cross-source analytics)
-- [ ] Task 13 — Schema Guardian agent
+- [x] Task 13a — Schema Guardian: infrastructure + detection layer
+- [ ] Task 13b — Schema Guardian: repair layer (LLM + approval queue)
 - [ ] Task 14 — Chaos Engine (schema drift only)
 - [ ] Task 15 — Agent Monitor dashboard
 - [ ] Task 16 — City Intelligence dashboard
@@ -260,6 +261,22 @@ Enriches `int_hourly_weather_transit` with dim_date fields. Dashboard-ready: no 
 
 ### `dbt/models/warehouse/fact_daily_city_summary.sql`
 Daily city pulse. References `int_daily_weather_incidents` for weather+incidents, aggregates `stg_transit_sf` directly for transit. FULL OUTER JOIN so any day in either source appears.
+
+### `agents/schema_guardian.py`
+Schema Guardian detection layer. Standalone — loads `.env` and credentials itself. Key functions:
+- `extract_schema(raw_data_json)` — recursive JSON fingerprinter. Dot notation for nested objects, `[]` notation for array elements. Handles top-level arrays (SF 311).
+- `get_stored_schema(source_name)` — reads latest active schema from `agents.schema_metadata` via window function.
+- `store_schema(source_name, schema)` — append-only write. Active fields get `is_active=TRUE`, missing fields get `is_active=FALSE` (never deleted).
+- `compare_schemas(old, new)` — pure function, returns list of changes: `field_added`, `field_removed`, `type_changed`.
+- `run_detection(source_name)` — main entry point. Returns status dict: `baseline_created`, `stable`, `drift_detected`, or `skipped`.
+
+### `agents/test_schema_guardian.py`
+Test script for detection layer. Run twice to confirm baseline → stable flow. Also prints BigQuery state summary after each run.
+
+## Schema Guardian — Detection Notes
+- **`incidents_sf` skips on empty raw data** — SF 311 raw rows currently contain `[]` (no records). Detection is skipped rather than storing a 0-field baseline. Will auto-baseline once real incident data arrives.
+- **Severity rules** — `field_removed` and `type_changed` → `critical`. `field_added` only → `warning`. Worst change in the set wins.
+- **Append-only schema history** — `schema_metadata` is never updated or deleted. Window function `ROW_NUMBER() PARTITION BY field_path ORDER BY detected_at DESC` always retrieves the latest state per field.
 
 ### Warehouse Dimensions
 - `dim_date` — generated hourly spine (2024–2026), 26.3k rows. No source dependency.
