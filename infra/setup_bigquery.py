@@ -22,7 +22,13 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(
 
 # Import schemas from single source of truth
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from dags.utils.schemas import RAW_TABLE_SCHEMA
+from dags.utils.schemas import (
+    RAW_TABLE_SCHEMA,
+    SCHEMA_METADATA_SCHEMA,
+    AGENT_EVENTS_SCHEMA,
+    AGENT_REPAIRS_SCHEMA,
+    SCHEMA_CHANGE_LOG_SCHEMA,
+)
 
 client = bigquery.Client(project=PROJECT_ID)
 
@@ -62,5 +68,27 @@ for table_name in RAW_TABLES:
         print(f"  [CREATED]  raw.{table_name}")
     except Conflict:
         print(f"  [EXISTS]   raw.{table_name}")
+
+# =============================================================================
+# Agent tables
+# =============================================================================
+
+AGENT_TABLES = {
+    "schema_metadata":  SCHEMA_METADATA_SCHEMA,
+    "agent_events":     AGENT_EVENTS_SCHEMA,
+    "agent_repairs":    AGENT_REPAIRS_SCHEMA,
+    "schema_change_log": SCHEMA_CHANGE_LOG_SCHEMA,
+}
+
+print("\nCreating agent tables...")
+
+for table_name, schema in AGENT_TABLES.items():
+    table_ref = f"{PROJECT_ID}.agents.{table_name}"
+    table = bigquery.Table(table_ref, schema=schema)
+    try:
+        client.create_table(table)
+        print(f"  [CREATED]  agents.{table_name}")
+    except Conflict:
+        print(f"  [EXISTS]   agents.{table_name}")
 
 print("\nDone.")

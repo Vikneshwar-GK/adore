@@ -123,12 +123,18 @@ These models exist because the data sources share natural join keys (time). Only
 - [x] Task 10 — dbt setup
 - [x] Task 11 — dbt staging models (Silver)
 - [x] Task 12 — dbt warehouse models (Gold)
-- [ ] Task 12b — dbt intermediate models (cross-source analytics)
+- [x] Task 12b — dbt intermediate models (cross-source analytics)
 - [ ] Task 13 — Schema Guardian agent
 - [ ] Task 14 — Chaos Engine (schema drift only)
 - [ ] Task 15 — Agent Monitor dashboard
 - [ ] Task 16 — City Intelligence dashboard
 - [ ] Task 17 — README + architecture diagram + demo polish
+
+## dbt Intermediate + Cross-Source Notes
+- **`days_with_incidents=0` on first runs** — the SF 311 DAG runs at 2am UTC and fetches the prior 24h. Open-Meteo returns a 7-day forecast window from the current date. On fresh data, the incident dates (yesterday) lag behind the weather window (today to +7 days), so the LEFT JOIN produces NULLs. This resolves naturally as more incident data accumulates.
+- **`fact_daily_city_summary` references `int_daily_weather_incidents`** — the "self-contained" constraint from the task spec was relaxed. Intermediates exist to be reused; duplicating `top_category` window logic in two files was worse than a clean dependency.
+- **`rows` is a reserved BigQuery keyword** — do not use it as a column alias in BigQuery SQL. Use `row_count` instead. Using `rows` causes `Syntax error: Unexpected keyword ROWS`.
+- **FULL OUTER JOIN grain** — `fact_daily_city_summary` uses FULL OUTER JOIN across weather+incidents and transit CTEs. `COALESCE(wi.date, t.date)` produces the primary key. Only days with data in at least one source appear — no empty rows from dim_date spine.
 
 ## dbt Warehouse Notes
 - **`dim_date` grain is hourly** — matches weather and transit data. Join incidents (daily grain) to dim_date using `DATE(date_hour)`.
@@ -196,6 +202,12 @@ Creates all 4 datasets (`raw`, `staging`, `warehouse`, `agents`) and 3 raw table
 ### `infra/verify_gcp.py`
 Confirms BigQuery connectivity. Run after any credential or project changes.
 
+### `infra/verify_data.py`
+Queries raw, staging, and warehouse layers to confirm row counts and value ranges. Run after any dbt full refresh or data backfill.
+
+### `infra/verify_task12b.py`
+Verifies intermediate and cross-source fact tables from Task 12b. Checks row counts, NULL ratios for cross-source joins, and dim_date population.
+
 ### `infra/api_tests/test_open_meteo.py`
 Tests Open-Meteo weather API. No auth. Verifies current_weather and hourly fields are present.
 
@@ -237,6 +249,18 @@ Double-unnests GTFS-RT: Entities → StopTimeUpdates. Keys are PascalCase (`Enti
 ### `dbt/models/staging/stg_incidents_sf.sql`
 Unnests SF 311 JSON array. Maps `status_description` → `status`, `lat`/`long` (strings) → FLOAT64, `neighborhoods_sffind_boundaries` → `neighborhood`. Deduplicates on `service_request_id`.
 
+### `dbt/models/intermediate/int_hourly_weather_transit.sql`
+Hourly weather + city-wide transit aggregation. LEFT JOIN so every weather hour is preserved. Transit aggregates: avg/max delay, total trips, total stop updates, on_time_pct.
+
+### `dbt/models/intermediate/int_daily_weather_incidents.sql`
+Daily weather + incident counts. LEFT JOIN so every weather day is preserved. Includes `top_category` via ROW_NUMBER window function (alphabetical tiebreak).
+
+### `dbt/models/warehouse/fact_weather_transit_hourly.sql`
+Enriches `int_hourly_weather_transit` with dim_date fields. Dashboard-ready: no joins needed for time-based filtering.
+
+### `dbt/models/warehouse/fact_daily_city_summary.sql`
+Daily city pulse. References `int_daily_weather_incidents` for weather+incidents, aggregates `stg_transit_sf` directly for transit. FULL OUTER JOIN so any day in either source appears.
+
 ### Warehouse Dimensions
 - `dim_date` — generated hourly spine (2024–2026), 26.3k rows. No source dependency.
 - `dim_route` — 59 distinct routes from GTFS-RT. IDs only — no names available from TripUpdates feed.
@@ -246,6 +270,12 @@ Unnests SF 311 JSON array. Maps `status_description` → `status`, `lat`/`long` 
 ### Warehouse Facts
 - `fact_transit_performance` — route × hour grain. `on_time_pct` = % delays between -60s and 300s.
 - `fact_incident_trends` — date × neighborhood × service_name grain. `avg_resolution_hours` is NULL — `closed_datetime` not present in SF 311 API response.
+- `fact_weather_transit_hourly` — hourly grain. Built from `int_hourly_weather_transit`, enriched with dim_date fields (date, hour, day_of_week, is_weekend, is_rush_hour). Dashboard-ready — no joins needed.
+- `fact_daily_city_summary` — daily grain. City pulse table. References `int_daily_weather_incidents` for weather+incidents side; aggregates `stg_transit_sf` directly for transit (int_hourly_weather_transit is hourly — re-aggregating from staging avoids double-aggregation). FULL OUTER JOIN across sources so any day in either appears.
+
+### Intermediate Models
+- `int_hourly_weather_transit` — view in warehouse schema. Left join: weather (left) + city-wide transit aggregated to hour. Transit columns are NULL for hours with no feed data (expected for late night / future forecast window).
+- `int_daily_weather_incidents` — view in warehouse schema. Left join: weather daily (left) + incidents aggregated to date. `top_category` uses ROW_NUMBER() PARTITION BY date ORDER BY cnt DESC, service_name ASC (alphabetical tiebreak for determinism).
 
 ## GCP Cost Controls
 - **Budget alert:** $50 cap on `adore-pipeline-v2` with email alerts at 50% ($25), 80% ($40), and 100% ($50). Configured in GCP Console → Billing → Budgets & alerts.
@@ -258,6 +288,30 @@ Unnests SF 311 JSON array. Maps `status_description` → `status`, `lat`/`long` 
 - `GOOGLE_APPLICATION_CREDENTIALS` is set in `x-airflow-env` in `docker-compose.yml` pointing to `/opt/airflow/gcp-credentials.json` (mounted read-only from `GCP_CREDENTIALS_PATH`)
 - `infra/verify_gcp.py` confirms BigQuery connectivity — run it after any credential or project changes
 - `python-dotenv` added to `requirements.txt` for loading `.env` outside of Docker contexts
+
+## Schema Guardian Features
+
+### Detection Layer (Task 13a)
+- Rule-based schema fingerprinting and comparison
+- Change classification: field_added, field_removed, type_changed
+- Append-only schema history in BigQuery
+
+### Repair Layer (Task 13b)
+- Context-aware SQL fix generation via Anthropic tool-use API
+- Downstream impact analysis via dbt lineage (manifest.json)
+- Pre-existing data assessment — checks if corrupted data landed during drift window
+- Automated validation — row count comparison, NULL checks, dbt test execution
+- Email notification to engineer when repair package is ready
+- Complete repair package presented via Agent Monitor dashboard with Approve/Reject
+
+### Repair Package Contents
+- What changed (schema diff)
+- Change classification (renamed/removed/type changed)
+- Full downstream impact tree (models + dashboards)
+- Data corruption assessment
+- Proposed SQL fix
+- Validation results with evidence
+- Approve / Reject / Modify interface
 
 ## Stretch Goals — Phase 2/3 (Only after Phase 1 is polished)
 - [ ] Deploy Airflow to GCE VM (deploy after Phase 1 is complete — no benefit deploying during active development)
