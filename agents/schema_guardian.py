@@ -375,4 +375,4 @@ def run_detection(source_name: str) -> dict:
         "Drift detected for %s: %d change(s) [%s] event_id=%s",
         source_name, len(changes), severity, event_id,
     )
-    return {"status": "drift_detected", "changes": changes}
+    return {"status": "drift_detected", "changes": changes, "event_id": event_id}
