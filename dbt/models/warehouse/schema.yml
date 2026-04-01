@@ -64,3 +64,21 @@ models:
         description: "Incident category (e.g. Street and Sidewalk Cleaning, Encampment)"
         tests:
           - not_null
+
+  - name: fact_weather_transit_hourly
+    description: "Hourly weather + city-wide transit performance, enriched with dim_date fields. Grain: one row per hour. Built from int_hourly_weather_transit. Hours with no transit data have NULL transit columns."
+    columns:
+      - name: date_hour
+        description: "Timestamp truncated to hour — primary key"
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_daily_city_summary
+    description: "Daily city pulse — one row per date combining weather, transit, and incidents. Built from int_daily_weather_incidents (weather+incidents) and stg_transit_sf (transit aggregated daily). FULL OUTER JOIN so any day present in either source is included."
+    columns:
+      - name: date
+        description: "Calendar date — primary key"
+        tests:
+          - not_null
+          - unique
