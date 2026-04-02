@@ -375,4 +375,58 @@ def run_detection(source_name: str) -> dict:
         "Drift detected for %s: %d change(s) [%s] event_id=%s",
         source_name, len(changes), severity, event_id,
     )
-    return {"status": "drift_detected", "changes": changes, "event_id": event_id}
+    return {
+        "status":     "drift_detected",
+        "changes":    changes,
+        "event_id":   event_id,
+        "old_schema": old_schema,
+        "new_schema": new_schema,
+    }
+
+
+# =============================================================================
+# Full pipeline orchestrator (detection + repair)
+# =============================================================================
+
+def run_guardian(source_name: str) -> dict:
+    """
+    Full pipeline: detection → repair (if drift found).
+
+    Calls run_detection for rule-based drift detection. If drift is detected,
+    calls run_repair from the repair engine to generate and queue a SQL fix.
+    Detection and repair are kept separate so run_detection remains testable
+    without triggering LLM calls.
+
+    Args:
+        source_name: e.g. "weather_sf"
+
+    Returns:
+        The detection result dict, augmented with a "repair" key if drift was
+        found:
+            {"status": "drift_detected", ..., "repair": {repair engine result}}
+        Otherwise returns the detection result unchanged.
+    """
+    detection_result = run_detection(source_name)
+
+    if detection_result["status"] != "drift_detected":
+        return detection_result
+
+    # Import inside function to avoid circular import at module load time
+    from agents.repair_engine import run_repair
+
+    repair_result = run_repair(
+        source_name=source_name,
+        event_id=detection_result["event_id"],
+        changes=detection_result["changes"],
+        old_schema=detection_result["old_schema"],
+        new_schema=detection_result["new_schema"],
+    )
+
+    logger.info(
+        "Repair result for %s: status=%s repair_id=%s",
+        source_name,
+        repair_result.get("status"),
+        repair_result.get("repair_id"),
+    )
+
+    return {**detection_result, "repair": repair_result}
