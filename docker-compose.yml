@@ -20,6 +20,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./dbt:/opt/airflow/dbt
     - ./logs:/opt/airflow/logs
+    - ./agents:/opt/airflow/agents
     - ${GCP_CREDENTIALS_PATH}:/opt/airflow/gcp-credentials.json:ro
   depends_on:
     postgres:

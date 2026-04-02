@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 from utils.bigquery_client import write_to_bigquery
 
@@ -47,7 +48,16 @@ with DAG(
         "retry_delay": timedelta(seconds=60),
     },
 ) as dag:
-    PythonOperator(
+    ingest_task = PythonOperator(
         task_id="ingest_weather",
         python_callable=ingest_weather,
     )
+
+    trigger_schema_guardian = TriggerDagRunOperator(
+        task_id="trigger_schema_guardian",
+        trigger_dag_id="agent_schema_guardian",
+        conf={"source_name": "weather_sf"},
+        wait_for_completion=False,
+    )
+
+    ingest_task >> trigger_schema_guardian
