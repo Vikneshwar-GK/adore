@@ -34,6 +34,41 @@ def write_to_bigquery(dataset_id: str, table_id: str, rows: list[dict]) -> None:
     logger.info("Inserted %d row(s) into %s", len(rows), table_ref)
 
 
+def dry_run_sql(sql: str) -> dict:
+    """
+    Validate SQL syntax via a BigQuery dry run — no data scanned, zero cost.
+
+    Submits the query with dry_run=True. BigQuery parses and validates the SQL
+    (including table references and column names) without executing it.
+
+    Args:
+        sql: The SQL string to validate.
+
+    Returns:
+        {
+            "valid": True/False,
+            "estimated_bytes": int or None,
+            "error": None or error message string
+        }
+    """
+    project_id = os.environ["GCP_PROJECT_ID"]
+    client = bigquery.Client(project=project_id)
+    job_config = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
+    try:
+        job = client.query(sql, job_config=job_config)
+        return {
+            "valid": True,
+            "estimated_bytes": job.total_bytes_processed,
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "valid": False,
+            "estimated_bytes": None,
+            "error": str(e),
+        }
+
+
 def query_bigquery(sql: str):
     """
     Run a SQL query against BigQuery with a 1GB max bytes billed cap.
