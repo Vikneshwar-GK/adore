@@ -132,7 +132,7 @@ These models exist because the data sources share natural join keys (time). Only
 - [x] Task 13b-5 — Schema Guardian: Airflow DAG + end-to-end verification
 - [x] Task 13 — Schema Guardian complete
 - [ ] Task 13b-5 — Schema Guardian: approval queue integration
-- [ ] Task 14 — Chaos Engine (schema drift only)
+- [x] Task 14 — Chaos Engine (schema drift only)
 - [ ] Task 15 — Agent Monitor dashboard
 - [ ] Task 16 — City Intelligence dashboard
 - [ ] Task 17 — README + architecture diagram + demo polish
@@ -334,6 +334,21 @@ Added in Task 13b-2. Validates SQL without executing it — zero cost, zero rows
 - **NULL threshold** — `_check_nulls` flags columns where new SQL produces >5 percentage points more NULLs than old SQL.
 - **Row count threshold** — 10% diff flags a warning. Configurable via `ROW_COUNT_DIFF_THRESHOLD_PCT` in `repair_validator.py`.
 - **`resolve_dbt_refs` scope** — only handles patterns in THIS project. Not a general Jinja parser.
+
+## Chaos Engine Notes
+- **Schema drift only** — no data quality or pipeline failure injection. Phase 2 stretch goal.
+- **Log before inject** — `chaos_log.json` is written BEFORE the BigQuery write. Cleanup is possible even if BQ write fails.
+- **Streaming buffer on reset** — BigQuery raises an explicit error if you DELETE a row still in the streaming buffer. The error is caught and printed; the log is still cleared. The row will be gone within ~90 minutes automatically.
+- **Schema baseline after reset** — `schema_metadata` retains the drifted fingerprint after `--reset`. The next real `run_guardian` will detect "drift back to normal" and may trigger another repair. This is expected and demonstrates bidirectional detection.
+- **Transit rename is the most dramatic variant** — `TripUpdate → TripData` changes 8+ fingerprinted paths simultaneously. Best for demos.
+- **`type_change` variant is NOT implemented** — the schema fingerprinter types arrays as `"array"` regardless of element type. A numbers→strings change inside an array is invisible to the fingerprinter. Only structural key-level changes (rename, remove, add) are detectable.
+
+### `chaos/chaos_mode.py`
+CLI tool for injecting schema drift. Usage: `python3 chaos/chaos_mode.py --inject schema_drift --source {source} [--variant rename_field|remove_field|add_field]`
+- `--inject schema_drift --source X` — fetches latest raw row, mutates it, writes back with newer `ingested_at`
+- `--reset` — attempts DELETE of all injected rows, clears `chaos_log.json`
+- `--status` — prints all active injections from `chaos_log.json`
+- Default variant: `rename_field` (most realistic real-world drift scenario)
 
 ## Email Notifications
 - Gmail app password required — see Google Account → Security → 2-Step Verification → App passwords.
