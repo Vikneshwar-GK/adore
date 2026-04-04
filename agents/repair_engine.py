@@ -15,6 +15,7 @@ Import usage:
 import json
 import logging
 import os
+import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -505,3 +506,169 @@ def run_repair(
         "notification_sent": notification_sent,
         "impact_summary":    impact_summary,
     }
+
+
+# =============================================================================
+# Deployment (called from dashboard on human approval)
+# =============================================================================
+
+def deploy_repair(repair_id: str) -> dict:
+    """
+    Execute an approved repair: write new SQL to disk and run dbt rebuild.
+
+    Called from the Agent Monitor dashboard when a user clicks "Approve".
+    Never called automatically — human approval required.
+
+    Flow:
+        fetch repair → backup current SQL → write new SQL → dbt run inside
+        container → update BigQuery status → log event
+
+    Args:
+        repair_id: UUID from agents.agent_repairs
+
+    Returns:
+        {"status": "deployed",  "repair_id": ..., "source_name": ..., "dbt_output": ...}
+        {"status": "failed",    "reason": ..., "error": ...}
+    """
+    # a. Fetch repair from BigQuery
+    rows = list(query_bigquery(
+        f"SELECT repair_id, source_name, new_sql, status "
+        f"FROM `agents.agent_repairs` "
+        f"WHERE repair_id = '{repair_id}' LIMIT 1"
+    ))
+    if not rows:
+        return {"status": "failed", "reason": "repair_not_found"}
+
+    repair = rows[0]
+    if repair.status != "pending":
+        return {"status": "failed", "reason": f"repair is {repair.status}, not pending"}
+
+    source_name = repair.source_name
+    new_sql      = repair.new_sql
+    sql_path     = PROJECT_ROOT / "dbt" / "models" / "staging" / f"stg_{source_name}.sql"
+    backup_path  = sql_path.with_suffix(".sql.backup")
+
+    # b. Backup current staging model
+    if sql_path.exists():
+        backup_path.write_text(sql_path.read_text())
+        logger.info("Backup written to %s", backup_path)
+    else:
+        logger.warning("Staging SQL not found at %s — proceeding without backup", sql_path)
+
+    # c. Write new SQL to disk
+    sql_path.write_text(new_sql)
+    logger.info("New SQL written to %s", sql_path)
+
+    # d. Run dbt rebuild inside the Airflow container
+    dbt_cmd = (
+        f"cd /opt/airflow/dbt && "
+        f"dbt run --select stg_{source_name}+"
+    )
+    try:
+        proc = subprocess.run(
+            ["docker", "compose", "exec", "-T", "airflow-webserver", "bash", "-c", dbt_cmd],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        stdout = proc.stdout
+        stderr = proc.stderr
+        logger.info("dbt run exit code: %d", proc.returncode)
+
+        if proc.returncode != 0:
+            logger.error("dbt run failed:\n%s", stderr)
+            # Restore from backup
+            if backup_path.exists():
+                sql_path.write_text(backup_path.read_text())
+                backup_path.unlink()
+                logger.info("Restored SQL from backup after dbt failure")
+            return {"status": "failed", "reason": "dbt_run_failed", "error": stderr}
+
+        # dbt succeeded — remove backup
+        if backup_path.exists():
+            backup_path.unlink()
+
+    except subprocess.TimeoutExpired:
+        if backup_path.exists():
+            sql_path.write_text(backup_path.read_text())
+            backup_path.unlink()
+        return {"status": "failed", "reason": "dbt_run_timeout", "error": "dbt run timed out after 300s"}
+    except Exception as e:
+        if backup_path.exists():
+            sql_path.write_text(backup_path.read_text())
+            backup_path.unlink()
+        return {"status": "failed", "reason": "subprocess_error", "error": str(e)}
+
+    # e. Update repair status in BigQuery (DML — safe, repair was proposed minutes/hours ago)
+    try:
+        list(query_bigquery(
+            f"UPDATE `agents.agent_repairs` "
+            f"SET status = 'approved', "
+            f"    approved_at = CURRENT_TIMESTAMP(), "
+            f"    deployed_at = CURRENT_TIMESTAMP() "
+            f"WHERE repair_id = '{repair_id}'"
+        ))
+    except Exception as e:
+        logger.error("Failed to update repair status in BigQuery: %s", e)
+
+    # f. Log deployment event
+    _write_event("repair_deployed", source_name, "info", {
+        "repair_id":   repair_id,
+        "dbt_command": f"dbt run --select stg_{source_name}+",
+    })
+
+    logger.info("Repair deployed successfully: repair_id=%s source=%s", repair_id, source_name)
+    return {
+        "status":      "deployed",
+        "repair_id":   repair_id,
+        "source_name": source_name,
+        "dbt_output":  stdout,
+    }
+
+
+def reject_repair(repair_id: str, user_notes: str = "") -> dict:
+    """
+    Reject a pending repair package.
+
+    Updates the repair status to 'rejected' and logs the event.
+    Called from the Agent Monitor dashboard when the user clicks "Reject".
+
+    Args:
+        repair_id:  UUID from agents.agent_repairs
+        user_notes: Optional rejection reason from the user
+
+    Returns:
+        {"status": "rejected", "repair_id": repair_id}
+        {"status": "failed",   "reason": ...}
+    """
+    rows = list(query_bigquery(
+        f"SELECT source_name, status FROM `agents.agent_repairs` "
+        f"WHERE repair_id = '{repair_id}' LIMIT 1"
+    ))
+    if not rows:
+        return {"status": "failed", "reason": "repair_not_found"}
+    if rows[0].status != "pending":
+        return {"status": "failed", "reason": f"repair is {rows[0].status}, not pending"}
+
+    source_name = rows[0].source_name
+
+    # Escape single quotes in user_notes to prevent SQL injection
+    safe_notes = user_notes.replace("'", "\\'")
+    try:
+        list(query_bigquery(
+            f"UPDATE `agents.agent_repairs` "
+            f"SET status = 'rejected', user_notes = '{safe_notes}' "
+            f"WHERE repair_id = '{repair_id}'"
+        ))
+    except Exception as e:
+        logger.error("Failed to update repair status: %s", e)
+        return {"status": "failed", "reason": str(e)}
+
+    _write_event("repair_rejected", source_name, "info", {
+        "repair_id":  repair_id,
+        "user_notes": user_notes,
+    })
+
+    logger.info("Repair rejected: repair_id=%s", repair_id)
+    return {"status": "rejected", "repair_id": repair_id}
