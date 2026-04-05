@@ -30,7 +30,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(
 )
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from dags.utils.bigquery_client import query_bigquery, write_to_bigquery
+from dags.utils.bigquery_client import query_bigquery, write_to_bigquery, insert_rows_sql
 from agents.lineage_analyzer import get_impact_summary
 from agents.data_assessor import assess_drift_damage
 from agents.repair_validator import validate_sql_fix
@@ -417,7 +417,8 @@ def run_repair(
     # -------------------------------------------------------------------------
     # f. Assess data damage in the drift window
     # -------------------------------------------------------------------------
-    now = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
     damage_assessment = assess_drift_damage(source_name, changes, now)
 
     # -------------------------------------------------------------------------
@@ -437,10 +438,12 @@ def run_repair(
         }
 
     # -------------------------------------------------------------------------
-    # h. Write repair package to BigQuery (status=pending, awaiting human approval)
+    # h. Write repair package to BigQuery via DML INSERT (not streaming insert).
+    #    DML INSERT rows are immediately DML-updatable — required for the
+    #    UPDATE on approval in deploy_repair(). See Critical Rule in CLAUDE.md.
     # -------------------------------------------------------------------------
     repair_id = str(uuid.uuid4())
-    write_to_bigquery("agents", "agent_repairs", [{
+    insert_rows_sql("agents", "agent_repairs", [{
         "repair_id":         repair_id,
         "event_id":          event_id,
         "source_name":       source_name,
@@ -452,7 +455,7 @@ def run_repair(
         "data_assessment":   json.dumps(damage_assessment),
         "validation_result": json.dumps(validation_result),
         "status":            "pending",
-        "proposed_at":       now,
+        "proposed_at":       now_dt,
         "approved_at":       None,
         "deployed_at":       None,
         "user_notes":        None,

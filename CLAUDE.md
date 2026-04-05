@@ -53,6 +53,7 @@ A data pipeline that ingests live San Francisco city data (weather, transit, inc
 6. **All agent actions go through approval_queue.** Human approves, rejects, or modifies before deployment.
 7. **Environment variables via `.env` file.** Never hardcode credentials or project IDs.
 8. **Intermediate dbt models** go in `dbt/models/intermediate/`. Materialized as views in the `warehouse` schema.
+9. **`agents.agent_repairs` uses DML INSERT (`insert_rows_sql`), not streaming insert.** Streaming inserts land in a buffer that blocks DML UPDATE for up to ~90 minutes. `agent_repairs` needs an immediate UPDATE on approval, so it must be written via `insert_rows_sql`. All other tables continue to use `write_to_bigquery` (streaming insert).
 
 ## BigQuery Datasets
 - `raw` — Bronze. Raw API JSON responses.
@@ -229,7 +230,8 @@ Tests SF 311 Socrata API. Sends `X-App-Token` header. Filters last 24h with `$wh
 
 ### `dags/utils/bigquery_client.py`
 The ONLY place in the project that writes to BigQuery. All DAGs must import from here.
-- `write_to_bigquery(dataset_id, table_id, rows)` — streaming insert, raises on error
+- `write_to_bigquery(dataset_id, table_id, rows)` — streaming insert, raises on error. Use for all tables except `agent_repairs`.
+- `insert_rows_sql(dataset_id, table_id, rows)` — DML INSERT (not streaming). Rows are immediately DML-updatable. Use only for `agent_repairs` (requires UPDATE on approval). Handles Python types: `None`→NULL, `bool`→TRUE/FALSE, `datetime`→TIMESTAMP(), str/int/float as literals.
 - `query_bigquery(sql)` — runs query with 1GB `maximum_bytes_billed` cap enforced
 
 ### `dags/ingestion/dag_weather_sf.py`

@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime
 
 from google.cloud import bigquery
 
@@ -32,6 +33,58 @@ def write_to_bigquery(dataset_id: str, table_id: str, rows: list[dict]) -> None:
         )
 
     logger.info("Inserted %d row(s) into %s", len(rows), table_ref)
+
+
+def insert_rows_sql(dataset_id: str, table_id: str, rows: list[dict]) -> None:
+    """
+    Insert rows via DML INSERT (not streaming insert).
+
+    Unlike write_to_bigquery (streaming insert), rows written here are
+    immediately DML-updatable (no streaming buffer delay). Use this for
+    any table that requires UPDATE after insert — specifically agent_repairs.
+
+    Handles Python types:
+        None      → NULL
+        bool      → TRUE / FALSE
+        datetime  → TIMESTAMP('...')
+        int/float → numeric literal
+        str       → single-quoted, single quotes escaped as ''
+    """
+    if not rows:
+        return
+
+    project_id = os.environ["GCP_PROJECT_ID"]
+    columns = list(rows[0].keys())
+
+    def _fmt(val):
+        if val is None:
+            return "NULL"
+        if isinstance(val, bool):
+            return "TRUE" if val else "FALSE"
+        if isinstance(val, datetime):
+            return f"TIMESTAMP('{val.isoformat()}')"
+        if isinstance(val, (int, float)):
+            return str(val)
+        # String — escape single quotes (SQL standard: '' not \')
+        escaped = str(val).replace("'", "''")
+        return f"'{escaped}'"
+
+    value_rows = []
+    for row in rows:
+        vals = ", ".join(_fmt(row[col]) for col in columns)
+        value_rows.append(f"({vals})")
+
+    col_list = ", ".join(columns)
+    values_clause = ",\n  ".join(value_rows)
+    sql = (
+        f"INSERT INTO `{project_id}.{dataset_id}.{table_id}` ({col_list})\n"
+        f"VALUES\n  {values_clause}"
+    )
+
+    query_bigquery(sql)
+    logger.info(
+        "DML INSERT %d row(s) into %s.%s.%s", len(rows), project_id, dataset_id, table_id
+    )
 
 
 def dry_run_sql(sql: str) -> dict:
