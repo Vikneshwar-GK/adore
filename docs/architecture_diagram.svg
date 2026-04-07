@@ -1,0 +1,132 @@
+<svg viewBox="0 0 920 740" xmlns="http://www.w3.org/2000/svg"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+
+  <!-- Background -->
+  <rect width="920" height="740" fill="#FAFAFA"/>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1565C0"/>
+    </marker>
+    <marker id="arr-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#E65100"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2E7D32"/>
+    </marker>
+    <marker id="arr-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#757575"/>
+    </marker>
+  </defs>
+
+  <!-- ── DATA SOURCES ─────────────────────────────────────────── -->
+
+  <rect x="20"  y="24" width="188" height="62" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="114" y="51" text-anchor="middle" font-size="13" font-weight="600" fill="#1565C0">Open-Meteo API</text>
+  <text x="114" y="69" text-anchor="middle" font-size="11" fill="#546E7A">Weather · every 15 min</text>
+
+  <rect x="228" y="24" width="196" height="62" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="326" y="51" text-anchor="middle" font-size="13" font-weight="600" fill="#1565C0">511.org GTFS-RT</text>
+  <text x="326" y="69" text-anchor="middle" font-size="11" fill="#546E7A">Transit delays · every 15 min</text>
+
+  <rect x="444" y="24" width="201" height="62" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="544" y="51" text-anchor="middle" font-size="13" font-weight="600" fill="#1565C0">SF 311 Socrata</text>
+  <text x="544" y="69" text-anchor="middle" font-size="11" fill="#546E7A">Incident reports · daily</text>
+
+  <!-- Sources → Airflow -->
+  <line x1="114" y1="86" x2="114" y2="149" stroke="#1565C0" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <line x1="326" y1="86" x2="326" y2="149" stroke="#1565C0" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <line x1="544" y1="86" x2="544" y2="149" stroke="#1565C0" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- ── AIRFLOW INGESTION ──────────────────────────────────────── -->
+
+  <rect x="20" y="150" width="625" height="62" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="332" y="178" text-anchor="middle" font-size="14" font-weight="600" fill="#1565C0">Apache Airflow — Ingestion</text>
+  <text x="332" y="197" text-anchor="middle" font-size="11" fill="#546E7A">dag_weather_sf · dag_transit_sf · dag_incidents_sf</text>
+
+  <!-- Airflow → Raw -->
+  <line x1="332" y1="212" x2="332" y2="269" stroke="#1565C0" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- ── BIGQUERY RAW ───────────────────────────────────────────── -->
+
+  <rect x="20" y="270" width="625" height="62" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="332" y="297" text-anchor="middle" font-size="14" font-weight="600" fill="#1565C0">BigQuery — raw (Bronze)</text>
+  <text x="332" y="317" text-anchor="middle" font-size="11" fill="#546E7A">weather_sf · transit_sf · incidents_sf  (raw JSON, append-only)</text>
+
+  <!-- Raw → dbt -->
+  <line x1="332" y1="332" x2="332" y2="393" stroke="#1565C0" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- Raw → Schema Guardian (horizontal dashed orange) -->
+  <line x1="645" y1="283" x2="688" y2="283" stroke="#E65100" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-orange)"/>
+  <text x="666" y="275" text-anchor="middle" font-size="9" fill="#E65100">triggers</text>
+
+  <!-- ── DBT TRANSFORMATION ────────────────────────────────────── -->
+
+  <rect x="20" y="394" width="625" height="78" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="332" y="420" text-anchor="middle" font-size="14" font-weight="600" fill="#1565C0">dbt — Medallion Transformation</text>
+  <text x="332" y="441" text-anchor="middle" font-size="11" fill="#546E7A">staging (Silver)  →  intermediate (cross-source joins)  →  warehouse (Gold)</text>
+  <text x="332" y="460" text-anchor="middle" font-size="10" fill="#78909C">weather × transit hourly  ·  weather × incidents daily</text>
+
+  <!-- dbt → Warehouse -->
+  <line x1="332" y1="472" x2="332" y2="529" stroke="#1565C0" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- ── BIGQUERY WAREHOUSE ─────────────────────────────────────── -->
+
+  <rect x="20" y="530" width="625" height="62" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="332" y="558" text-anchor="middle" font-size="14" font-weight="600" fill="#1565C0">BigQuery — warehouse (Gold)</text>
+  <text x="332" y="577" text-anchor="middle" font-size="11" fill="#546E7A">fact_daily_city_summary · fact_weather_transit_hourly · fact_transit_performance · fact_incident_trends</text>
+
+  <!-- Warehouse → City Intelligence -->
+  <line x1="332" y1="592" x2="332" y2="649" stroke="#2E7D32" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- ── CITY INTELLIGENCE DASHBOARD ───────────────────────────── -->
+
+  <rect x="20" y="650" width="625" height="62" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="332" y="678" text-anchor="middle" font-size="14" font-weight="600" fill="#2E7D32">City Intelligence Dashboard</text>
+  <text x="332" y="697" text-anchor="middle" font-size="11" fill="#546E7A">City Pulse · Weather × Transit · Route Performance · Incident Analysis</text>
+
+  <!-- ── RIGHT COLUMN: AGENT FLOW ───────────────────────────────── -->
+
+  <!-- Schema Guardian -->
+  <rect x="690" y="240" width="210" height="92" rx="8" fill="#FFF3E0" stroke="#E65100" stroke-width="1.5"/>
+  <text x="795" y="264" text-anchor="middle" font-size="13" font-weight="600" fill="#E65100">Schema Guardian</text>
+  <text x="795" y="283" text-anchor="middle" font-size="11" fill="#546E7A">Detection (rule-based)</text>
+  <text x="795" y="300" text-anchor="middle" font-size="11" fill="#546E7A">LLM Repair Engine</text>
+  <text x="795" y="317" text-anchor="middle" font-size="10" fill="#78909C">Anthropic tool-use · Claude Sonnet</text>
+
+  <!-- Schema Guardian → Approval Queue -->
+  <line x1="795" y1="332" x2="795" y2="381" stroke="#E65100" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+
+  <!-- Approval Queue -->
+  <rect x="690" y="382" width="210" height="62" rx="8" fill="#FFF3E0" stroke="#E65100" stroke-width="1.5"/>
+  <text x="795" y="409" text-anchor="middle" font-size="13" font-weight="600" fill="#E65100">Approval Queue</text>
+  <text x="795" y="428" text-anchor="middle" font-size="11" fill="#546E7A">Human review · Approve / Reject</text>
+
+  <!-- Approval Queue → Agent Monitor -->
+  <line x1="795" y1="444" x2="795" y2="501" stroke="#2E7D32" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- Agent Monitor -->
+  <rect x="690" y="502" width="210" height="62" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="795" y="529" text-anchor="middle" font-size="13" font-weight="600" fill="#2E7D32">Agent Monitor</text>
+  <text x="795" y="548" text-anchor="middle" font-size="11" fill="#546E7A">Repair packages · deploy fix</text>
+
+  <!-- ── CHAOS ENGINE ────────────────────────────────────────────── -->
+
+  <rect x="690" y="650" width="210" height="62" rx="8" fill="#F5F5F5" stroke="#9E9E9E" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="795" y="677" text-anchor="middle" font-size="13" font-weight="600" fill="#757575">Chaos Engine</text>
+  <text x="795" y="696" text-anchor="middle" font-size="11" fill="#9E9E9E">Controlled drift injection</text>
+
+  <!--
+    Chaos → Raw: diagonal dashed line from left edge of Chaos box
+    up through the gap between columns to the right edge of Raw.
+    Verified: stays in the 45px gap (x=645–690) throughout.
+  -->
+  <line x1="690" y1="681" x2="646" y2="302" stroke="#9E9E9E" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-gray)"/>
+
+  <!-- ── FOOTER ─────────────────────────────────────────────────── -->
+  <text x="460" y="730" text-anchor="middle" font-size="10" fill="#B0BEC5">
+    ADORE — Autonomous Data Operations and Recovery Engine
+  </text>
+
+</svg>

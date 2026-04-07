@@ -2,10 +2,6 @@
 
 A live data pipeline with an AI agent that detects upstream schema drift, traces downstream impact through dbt lineage, generates validated SQL fixes, and presents complete repair packages for human approval — reducing the diagnostic workflow from hours to minutes.
 
-> 🚧 **Under construction** — core engine complete, dashboard polish in progress.
->
-> `████████████████░░░░` **80%**
-
 ---
 
 ## The Problem
@@ -122,4 +118,75 @@ Transformed through a medallion architecture with cross-source analytics:
 
 ---
 
-*Full setup instructions, architecture diagram, and demo video coming on completion.*
+## Architecture
+
+![Architecture Diagram](docs/architecture_diagram.svg)
+
+---
+
+## Demo
+
+Demo video coming soon — shows the full loop: chaos injection → schema drift detection → LLM repair with impact analysis → human approval → automated deployment.
+
+---
+
+## Project Structure
+
+```
+adore/
+├── dags/
+│   ├── ingestion/        # 3 source DAGs (weather, transit, incidents)
+│   ├── transformation/   # dbt run DAG
+│   ├── agents/           # Schema Guardian trigger DAG
+│   └── utils/            # BigQuery client, schemas (single source of truth)
+├── dbt/
+│   └── models/
+│       ├── staging/      # JSON parsing, deduplication
+│       ├── intermediate/ # Cross-source joins (weather×transit, weather×incidents)
+│       └── warehouse/    # Star schema facts + dimensions
+├── agents/               # Schema Guardian, repair engine, lineage analyzer
+├── dashboards/           # Agent Monitor (approval UI), City Intelligence
+├── chaos/                # Controlled failure injection CLI
+└── docs/                 # Architecture diagram, demo script
+```
+
+---
+
+## How to Run
+
+**Prerequisites:** Docker, Python 3.11+, GCP account with BigQuery
+
+**Clone and configure**
+```bash
+git clone https://github.com/Vikneshwar-GK/adore-pipeline.git
+cp .env.example .env        # Fill in API keys and GCP credentials
+```
+
+**Start the pipeline**
+```bash
+docker compose up -d        # Airflow at localhost:8080
+```
+
+**Start dashboards**
+```bash
+streamlit run dashboards/agent_monitor.py
+streamlit run dashboards/city_intelligence.py
+```
+
+**Demo the agent**
+```bash
+python chaos/chaos_mode.py --inject schema_drift --source weather_sf
+# Trigger ingestion DAG in Airflow UI → Schema Guardian fires automatically
+# → Repair package appears in Agent Monitor → Approve → Fix deployed
+```
+
+---
+
+## Key Design Decisions
+
+- **Rule-based detection before LLM** — cost scales with failure rate, not data volume
+- **Anthropic tool-use API (native function calling)** — agent decides which tools to call, not a hardcoded sequence
+- **Human-in-the-loop** — agent investigates and proposes, engineer approves
+- **Chaos engineering for validation** — controlled failure injection, same pattern as Netflix Chaos Monkey
+- **COALESCE-based fixes** — handles both old and new schema rows during the transition window
+- **dbt lineage for impact analysis** — blast radius traced automatically via manifest.json

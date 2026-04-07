@@ -112,7 +112,7 @@ These models exist because the data sources share natural join keys (time). Only
 - Dashboard apps: `dashboards/{dashboard_name}.py`
 - Utility modules: `dags/utils/`
 
-## Current Progress — Phase 1 (Active)
+## Current Progress — Phase 1 (Complete ✓)
 - [x] Task 0 — Repository setup and scaffolding
 - [x] Task 1 — Local environment setup (Docker, Airflow)
 - [x] Task 2 — GCP project setup
@@ -136,7 +136,7 @@ These models exist because the data sources share natural join keys (time). Only
 - [x] Task 14 — Chaos Engine (schema drift only)
 - [x] Task 15a — Agent Monitor dashboard + deploy repair function
 - [x] Task 16 — City Intelligence dashboard
-- [ ] Task 17 — README + architecture diagram + demo polish
+- [x] Task 17 — README + architecture diagram + demo polish
 
 ## dbt Intermediate + Cross-Source Notes
 - **`days_with_incidents=0` on first runs** — the SF 311 DAG runs at 2am UTC and fetches the prior 24h. Open-Meteo returns a 7-day forecast window from the current date. On fresh data, the incident dates (yesterday) lag behind the weather window (today to +7 days), so the LEFT JOIN produces NULLs. This resolves naturally as more incident data accumulates.
@@ -371,6 +371,12 @@ City Intelligence Streamlit dashboard. Run: `streamlit run dashboards/city_intel
 - **Transit Performance** — top 10 most delayed routes, horizontal bar chart colored by on-time %, plus table.
 - **Incident Analysis** — top 15 categories bar chart, top 15 neighborhoods bar chart, daily volume line chart with closed-count resolution line.
 - All queries use `@st.cache_data(ttl=300)`. Date range sidebar filters all sections. Graceful empty-state handling throughout.
+
+### `docs/architecture_diagram.svg`
+Hand-crafted SVG architecture diagram. No external dependencies — pure SVG, renders natively on GitHub. Shows full system: data sources → Airflow → raw → dbt → warehouse → City Intelligence (blue, left column) and Schema Guardian → Approval Queue → Agent Monitor (orange/green, right column) and Chaos Engine (gray, dashed). ViewBox 920×740.
+
+### `docs/demo_script.md`
+60-second screen recording script. Step-by-step with exact commands, timestamps per step, and talking points for voiceover. Covers the full chaos → detection → repair → approve → deploy loop.
 
 ## Email Notifications
 - Gmail app password required — see Google Account → Security → 2-Step Verification → App passwords.
