@@ -135,7 +135,7 @@ These models exist because the data sources share natural join keys (time). Only
 - [ ] Task 13b-5 — Schema Guardian: approval queue integration
 - [x] Task 14 — Chaos Engine (schema drift only)
 - [x] Task 15a — Agent Monitor dashboard + deploy repair function
-- [ ] Task 16 — City Intelligence dashboard
+- [x] Task 16 — City Intelligence dashboard
 - [ ] Task 17 — README + architecture diagram + demo polish
 
 ## dbt Intermediate + Cross-Source Notes
@@ -363,6 +363,14 @@ Agent Monitor Streamlit dashboard. Run: `streamlit run dashboards/agent_monitor.
 - **Pending Approvals** — expandable cards with schema diff, impact tree, data assessment, SQL side-by-side, validation checks, Approve/Reject buttons.
 - **Recent Events** — last 50 events from `agent_events`, filterable by source + event type.
 - **Repair History** — last 20 non-pending repairs with expandable details.
+
+### `dashboards/city_intelligence.py`
+City Intelligence Streamlit dashboard. Run: `streamlit run dashboards/city_intelligence.py`
+- **City Pulse** — latest day's key metrics (temp, precip, delay, incidents, top category) + daily trend charts (weather dual-axis, transit/incidents dual-axis).
+- **Weather Impact on Transit** — scatter plot (precipitation vs delay, rush-hour colored), hourly delay pattern (weekday vs weekend), dual-axis time series (last 3 days).
+- **Transit Performance** — top 10 most delayed routes, horizontal bar chart colored by on-time %, plus table.
+- **Incident Analysis** — top 15 categories bar chart, top 15 neighborhoods bar chart, daily volume line chart with closed-count resolution line.
+- All queries use `@st.cache_data(ttl=300)`. Date range sidebar filters all sections. Graceful empty-state handling throughout.
 
 ## Email Notifications
 - Gmail app password required — see Google Account → Security → 2-Step Verification → App passwords.
